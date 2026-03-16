@@ -1,0 +1,264 @@
+---
+title: "Taller 9 de Programación para SIG"
+author: "Kevin Orlando Reyes Mosquera"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: true
+    theme: cosmo
+    code-fold: show
+    code-tools: true
+    code-copy: true
+    smooth-scroll: true
+    self-contained: true
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: true
+execute:
+  echo: true
+  warning: false
+  message: false
+lang: es
+---
+
+<style>
+/* Fondo general y tipografía */
+body {
+  text-align: justify;
+  line-height: 1.7;
+}
+
+/* Títulos */
+h1, h2, h3 {
+  font-weight: 700;
+}
+
+h1 {
+  border-bottom: 3px solid #2c7fb8;
+  padding-bottom: 0.3rem;
+  margin-top: 1.2rem;
+}
+
+h2 {
+  color: #1f5f8b;
+  margin-top: 1.5rem;
+}
+
+h3 {
+  color: #2c7a7b;
+}
+
+/* Cajas personalizadas */
+.caja-suave {
+  background: #f7fbff;
+  border-left: 6px solid #2c7fb8;
+  padding: 1rem 1.2rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.caja-verde {
+  background: #f3fbf6;
+  border-left: 6px solid #2ca25f;
+  padding: 1rem 1.2rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.caja-morada {
+  background: #faf7ff;
+  border-left: 6px solid #7a4ebf;
+  padding: 1rem 1.2rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+/* Código */
+pre, code {
+  border-radius: 8px;
+}
+
+pre code {
+  font-size: 0.95rem;
+}
+
+/* Tablas */
+table {
+  width: 100%;
+  margin: 1rem 0;
+}
+
+th {
+  background-color: #eaf4fb !important;
+}
+
+/* Bloques destacados */
+blockquote {
+  border-left: 5px solid #2c7fb8;
+  background: #f8fbfd;
+  padding: 0.8rem 1rem;
+  border-radius: 6px;
+}
+</style>
+
+# Introducción
+
+En el procesamiento de datos geográficos, rara vez trabajamos con una sola coordenada a la vez. Los Modelos Digitales de Elevación (DEM) son esencialmente inmensas matrices matemáticas bidimensionales, y las bases de datos censales del DANE son tablas con millones de filas.
+
+::: {.callout-note title="Objetivos del taller" appearance="simple"}
+1. **Manipular matrices numéricas:** Crear, redimensionar y operar arreglos unidimensionales (1D) y bidimensionales (2D) simulando coordenadas y datos de elevación.
+2. **Aplicar filtros matemáticos:** Utilizar indexación booleana y *slicing* para aislar datos geográficos que cumplan condiciones específicas (ej. elevación > 2000 m).
+3. **Estructurar datos tabulares:** Construir y consultar *DataFrames* para organizar atributos de geometrías.
+4. **Agrupar y unir bases de datos:** Ejecutar cruces de información (*merges*) y resúmenes estadísticos (agrupaciones) simulando cruces de datos del DANE y el IDEAM.
+:::
+
+::: {.callout-tip title="Idea central del capítulo" appearance="simple"}
+La meta de este taller no es solo que el código funcione, sino que quede bien organizado, sea reutilizable y se parezca más a la lógica de un problema real en SIG.
+:::
+
+# Ejercicio 1: Vectorización y álgebra espacial (Haversine)
+
+## Código desarrollado
+
+```{python}
+# 1. Importamos las librerías necesarias
+import pandas as pd
+import numpy as np
+```
+
+```{python}
+# 2. Construimos los datos del censo
+datos_censo = {
+    "Ciudad": ["Bogotá", "Medellín", "Cali", "Barranquilla"],
+    "Region": ["Andina", "Andina", "Pacífica", "Caribe"],
+    "Poblacion": [7181469, 2529403, 2227642, 1206319],
+    "Elevacion": [2640, 1495, 1018, 18],
+    "Latitud": [4.7110, 6.2442, 3.4516, 10.9685],
+    "Longitud": [-74.0721, -75.5812, -76.5320, -74.7813]
+}
+```
+
+```{python}
+# 3. Convertimos el diccionario en un DataFrame
+df = pd.DataFrame(datos_censo)
+
+print("DataFrame original:")
+print(df)
+```
+
+```{python}
+# 4. Función vectorizada para calcular distancias desde Bogotá
+def calcular_distancias(df):
+    """
+    Calcula de forma vectorizada la distancia en kilómetros
+    desde Bogotá hacia todas las ciudades del DataFrame,
+    usando la fórmula de Haversine.
+
+    Parámetros
+    ----------
+    df : pandas.DataFrame
+        Debe contener las columnas 'Latitud' y 'Longitud'.
+
+    Retorna
+    -------
+    pandas.DataFrame
+        El mismo DataFrame con una nueva columna llamada
+        'Distancia_Bogota'.
+    """
+
+    # Coordenadas fijas de Bogotá
+    lat_bogota = 4.7110
+    lon_bogota = -74.0721
+
+    # Convertimos todas las coordenadas a radianes
+    lat1 = np.radians(lat_bogota)
+    lon1 = np.radians(lon_bogota)
+    lat2 = np.radians(df["Latitud"])
+    lon2 = np.radians(df["Longitud"])
+
+    # Fórmula de Haversine aplicada de forma vectorizada
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    c = 2 * np.arcsin(np.sqrt(a))
+
+    # Radio de la Tierra en kilómetros
+    radio_tierra = 6371
+
+    # Agregamos la nueva columna al DataFrame
+    df["Distancia_Bogota"] = np.round(radio_tierra * c, 2)
+
+    return df
+```
+
+```{python}
+# 5. Aplicamos la función
+df = calcular_distancias(df)
+
+print("DataFrame con la distancia desde Bogotá:")
+df.style.set_properties(**{"text-align": "center"}).set_table_styles(
+    [{"selector": "th", "props": [("text-align", "center")]}]
+).format({"Distancia_Bogota": "{:.2f}"})
+```
+
+## Análisis del ejercicio
+
+::: {.callout-important title="Lectura del resultado" appearance="simple"}
+En este ejercicio trabajamos con un DataFrame que contiene información de cuatro ciudades colombianas, incluyendo su población, elevación y coordenadas geográficas. La función `calcular_distancias` utiliza la fórmula de Haversine para calcular la distancia en kilómetros desde Bogotá hacia cada una de las otras ciudades de manera vectorizada, lo que permite procesar todas las filas del DataFrame de forma eficiente. Al final, se agrega una nueva columna llamada 'Distancia_Bogota' que muestra estas distancias redondeadas a dos decimales.
+:::
+
+# Ejercicio 2: Limpieza, filtros y agregación tabular
+
+## Código desarrollado
+```{python}
+# 1. Creamos un dataframe  para estaciones meteorológicas con datos faltantes
+import pandas as pd
+
+estaciones_meteorologicas = {
+    "Estación": ["Páramo", "Valle", "Costa", "Selava", "Sabada"],
+    "elevación": [3200, 1500, 15, 200, 2600],
+    "Precipitación": [850.5, 1200.0, None, 3000.5, None]
+}
+df_estaciones = pd.DataFrame(estaciones_meteorologicas)
+print("Datos originales con valores faltantes:")
+print(df_estaciones)
+```
+
+```{python}
+# 2. Limpieza de datos: Rellenar valores faltantes con la media de precipitación
+media_precipitacion = df_estaciones["Precipitación"].mean()
+df_limpio = df_estaciones.fillna(value={"Precipitación": media_precipitacion})
+print(f"\nDatos después de la limpieza (valores faltantes rellenados con la media = {media_precipitacion:.1f}):")
+print(df_limpio)
+```
+
+```{python}
+# 3. Filtrado: Extraer estaciones con elevación mayor a 1000 metros
+df_filtrado = df_limpio[df_limpio["elevación"] > 1000]
+print(f"\nEstaciones con elevación mayor a 1000 metros:")
+print(df_filtrado)
+```
+
+```{python}
+# 4. Calculo final precipitacion promedio  de las estaciones altas
+media_filtrada = df_filtrado["Precipitación"].mean()
+print(f"\nPrecipitación promedio de las estaciones filtradas: {media_filtrada:.1f} mm")
+```
+
+## Análisis del ejercicio
+
+::: {.callout-important title="Lectura del resultado" appearance="simple"}
+En este ejercicio trabajamos con un DataFrame que representa estaciones meteorológicas, algunas de las cuales tienen valores faltantes en la columna de precipitación. Primero, se calcula la media de la precipitación y se utiliza para rellenar los valores faltantes, asegurando que el análisis posterior no se vea afectado por datos incompletos. Luego, se filtran las estaciones que están ubicadas a una elevación mayor a 1000 metros, lo que nos permite enfocarnos en aquellas que podrían tener características climáticas particulares. Finalmente, se calcula la precipitación promedio de estas estaciones filtradas, proporcionando una visión general de las condiciones climáticas en esas altitudes.
+:::
+
+
+# Conclusiones
+
+::: {.callout-important title="Cierre del taller" appearance="simple"}
+Este taller permitió nos permitio explorar técnicas fundamentales de manipulación de datos en Python, aplicadas al contexto de los Sistemas de Información Geográfica (SIG). A través de ejercicios prácticos, se abordaron temas como la vectorización para cálculos espaciales, la limpieza de datos con valores faltantes, el filtrado basado en condiciones específicas y la agregación de información para obtener insights relevantes. Estas habilidades son esenciales para cualquier profesional que trabaje con datos geográficos, ya que permiten transformar datos crudos en información útil para la toma de decisiones.
+
+:::
